@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from flask_restx import Api, Namespace, Resource
 
-from api.validation import TaskOutSchema
+from api.validation.TaskOutSchema import TaskOutSchema
 from api.validation.TaskInschema import TaskInSchema
 from config.db import SessionLocal
 from repositories.TaskRepository import SqlAlchemyTaskRepository
@@ -13,6 +13,9 @@ task_ns = Namespace("task_ns", description="tasks")
 task_api.add_namespace(task_ns)
 
 
+# SAMPLE TEST URL
+# http://127.0.0.1:5000/tasks/task_ns/1
+
 @task_ns.route('', methods=['POST'])
 @task_ns.route('/<int:task_id>', methods=['GET', 'PUT', 'DELETE'])
 class TaskResource(Resource):
@@ -23,22 +26,16 @@ class TaskResource(Resource):
             task_repo = SqlAlchemyTaskRepository(session)
             task_service = TaskService(task_repo)
             task = task_service.create_task(title=data.title, description=data.description, status=data.status)
-            return task, 201
+            result = TaskOutSchema.format_task(task,TaskOutSchema)
+            return jsonify(result), 201
 
     def get(self, task_id):
         with SessionLocal() as session:
             task_repo = SqlAlchemyTaskRepository(session)
             task_service = TaskService(task_repo)
             task = task_service.get_task(task_id)
-            return jsonify({
-                "id": task.id,
-                "title": task.title,
-                "description": task.description,
-                "created_at": task.created_at,
-                "updated_at": task.updated_at
-
-            }
-            )
+            result = TaskOutSchema.format_task(task, TaskOutSchema)
+            return jsonify(result.dict())
 
     # Flask’s jsonify internally uses Python’s json.dumps().
     #
@@ -51,9 +48,11 @@ class TaskResource(Resource):
         with SessionLocal() as session:
             task_repo = SqlAlchemyTaskRepository(session)
             task_service = TaskService(task_repo)
-            task_service.update_task(task_id, **payload)
+            update_result = task_service.update_task(task_id, **payload)
+            return TaskOutSchema.format_task(update_result, TaskOutSchema)
 
-    #
+            #
+
     # Great question 👍
     #
     # Let’s break it down:
@@ -125,8 +124,9 @@ class TaskResource(Resource):
         with SessionLocal() as session:
             task_repo = SqlAlchemyTaskRepository(session)
             task_service = TaskService(task_repo)
-            task_service.delete_task(task_id)
-
+            result = task_service.delete_task(task_id)
+            if result is None:
+                return {f"successfully deleted:{result}"}
 
 # So the rule of thumb is:
 #
